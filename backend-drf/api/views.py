@@ -14,12 +14,28 @@ from .utils import save_plot
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import load_model
 from sklearn.metrics import mean_squared_error, r2_score
+from django.core.cache import cache
 # Using APIView as we get full control
+# Load ML Model
+model = load_model('stock_prediction_model.keras')
 class StockPredictionAPIView(APIView):
     def post(self, request):
         serializer = StockPredictionSerializer(data=request.data)
         if serializer.is_valid():
             ticker = serializer.validated_data['ticker']
+
+            # Step 1: Create unique cache key
+            cache_key = f"stock_{ticker}"
+
+            # Step 2: Check cache
+            cached_data = cache.get(cache_key)
+
+            if cached_data:
+                return Response({
+                    'status': 'success',
+                    'source': 'cache',
+                    **cached_data
+                })
 
             #Fetch data from yfinance 
             now = datetime.now()
@@ -79,8 +95,6 @@ class StockPredictionAPIView(APIView):
             # Scaling down the data between 0 and 1 
             scaler = MinMaxScaler(feature_range=(0,1))
 
-            # Load ML Model
-            model = load_model('stock_prediction_model.keras')
 
             #Preparing Test Data
             past_100_days = data_training.tail(100)
@@ -126,8 +140,7 @@ class StockPredictionAPIView(APIView):
 
 
 
-            return Response({
-                'status': 'success', 
+            response_data = {
                 'plot_img': plot_img,
                 'plot_100dma': plot_100_dma,
                 'plot_200dma': plot_200_dma,
@@ -135,6 +148,15 @@ class StockPredictionAPIView(APIView):
                 'mse': mse,
                 'rmse': rmse,
                 'r2': r2,
+            }
+
+            # Step 3: Store in cache (10 minutes)
+            cache.set(cache_key, response_data, timeout=600)
+
+            return Response({
+                'status': 'success',
+                'source': 'api',
+                **response_data
             })
 
 

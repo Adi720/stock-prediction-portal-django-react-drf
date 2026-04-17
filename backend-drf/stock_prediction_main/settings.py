@@ -140,6 +140,13 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
 }
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "stock-cache",
+    }
+}
+
 # Media Files Configuration 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR /'media'
