@@ -2,6 +2,8 @@
 
 A full-stack machine learning web application that predicts stock prices using deep learning techniques. The system leverages historical stock data and applies an LSTM-based neural network to forecast future trends.
 
+Includes backend performance optimizations such as **model preloading and API-level caching** for faster and efficient inference.
+
 ---
 
 ## 🧠 Project Overview
@@ -54,6 +56,31 @@ This project combines **Machine Learning + Full Stack Development** to deliver a
 
 ---
 
+## ⚡ Performance Optimizations
+
+* 🚀 **Model Preloading**
+
+  * Loaded the trained LSTM model once at server startup instead of per request
+  * Reduced inference latency significantly
+
+* ⚡ **API-Level Caching**
+
+  * Implemented Django in-memory caching (LocMemCache)
+  * Stored predictions for frequently requested tickers
+  * Avoided redundant ML computation and plotting
+
+* 🧠 **Read-Through Cache Strategy**
+
+  * Cache checked before computation
+  * On cache miss → compute → store → return
+  * On cache hit → instant response
+
+* ⏱️ **Cache Expiry**
+
+  * Configured 10-minute timeout to balance freshness and performance
+
+---
+
 ## 📸 Application Screenshots
 
 ### 🏠 Landing Page
@@ -70,11 +97,11 @@ This project combines **Machine Learning + Full Stack Development** to deliver a
 
 ### 📈 Stock Trends
 
-![Charts](./screenshots/chart1.png)
+![Charts](./screenshots/closing_price.png)
 
 ### 📉 Moving Averages
 
-![Moving Average](./screenshots/chart2.png)
+![Moving Average](./screenshots/moving_average.png)
 
 ### 🤖 Prediction Output
 
@@ -85,10 +112,26 @@ This project combines **Machine Learning + Full Stack Development** to deliver a
 ## 🏗️ System Architecture
 
 ```
-React Frontend  →  Django REST API  →  ML Model (Keras LSTM)
-                                ↓
-                          Data Processing (Pandas)
+React Frontend
+      ↓
+Django REST API
+      ↓
+Cache Layer (Django LocMemCache)
+      ↓
+ML Model (Keras LSTM)
+      ↓
+Data Processing (Pandas, NumPy, yFinance)
 ```
+
+### 🔍 Flow
+
+1. User enters stock ticker
+2. API checks cache
+
+   * ✅ If present → return instantly
+   * ❌ If not → fetch data + process + predict
+3. Store result in cache
+4. Return response to frontend
 
 ---
 
@@ -105,6 +148,7 @@ React Frontend  →  Django REST API  →  ML Model (Keras LSTM)
   * Mean Squared Error (MSE)
   * Root Mean Squared Error (RMSE)
   * R² Score
+* Inference optimized using preloaded model to reduce latency
 
 ---
 
@@ -115,6 +159,16 @@ React Frontend  →  Django REST API  →  ML Model (Keras LSTM)
 | `/api/register/` | POST   | Register user        |
 | `/api/token/`    | POST   | Login (JWT)          |
 | `/api/predict/`  | POST   | Get stock prediction |
+
+---
+
+## 🧠 Key Learnings
+
+* Designed an end-to-end full-stack ML system
+* Optimized backend performance by avoiding repeated model loading
+* Implemented caching to reduce redundant computations
+* Built scalable API architecture for time-series prediction
+* Balanced performance and data freshness using cache expiry
 
 ---
 
