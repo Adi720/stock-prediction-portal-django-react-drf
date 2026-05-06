@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSpinner } from '@fortawesome/free-solid-svg-icons'
 import axiosInstance from '../../axiosInstance'
+import StockChart from '../StockChart'
+
 const Dashboard = () => {
 
     const accessToken = localStorage.getItem('accessToken')
@@ -16,6 +18,10 @@ const Dashboard = () => {
     const [mse, setMSE] = useState()
     const [rmse, setRMSE] = useState()
     const [r2, setR2] = useState()
+    const [chartData, setChartData] = useState(null)
+    const [aiInsight, setAiInsight] = useState()
+    const [typedText, setTypedText] = useState('')
+    const [showStructured, setShowStructured] = useState(false)
 
 
     useEffect(() => {
@@ -29,8 +35,49 @@ const Dashboard = () => {
         fetchProtectedData()
     }, [])
 
+
+    const cleanText = (text) => {
+        if (!text) return text
+
+        return text
+            .replace(/\*\*/g, '')   // remove markdown bold
+            .replace(/•/g, '-')     // normalize bullets
+            .replace(/\r/g, '')
+            .trim()
+    }
+
+    useEffect(() => {
+        if (!aiInsight) return;
+
+        setShowStructured(false);
+
+        let index = 0;
+        const words = aiInsight.split(' ');
+
+        const interval = setInterval(() => {
+            const chunk = words.slice(index, index + 5).join(' ');
+            setTypedText(prev => prev + (prev ? ' ' : '') + chunk);
+
+            index += 5;
+
+            if (index >= words.length) {
+                clearInterval(interval);
+
+                // 🔥 delay before switching UI
+                setTimeout(() => {
+                    setShowStructured(true);
+                }, 400);
+            }
+        }, 120);
+
+        return () => clearInterval(interval);
+
+    }, [aiInsight]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setTypedText('');
+        setAiInsight(null);
         setLoading(true)
         try {
             const response = await axiosInstance.post('/predict/', {
@@ -49,7 +96,18 @@ const Dashboard = () => {
             setMSE(response.data.mse)
             setRMSE(response.data.rmse)
             setR2(response.data.r2)
+            setAiInsight(response.data.ai_insight)
             // set plots 
+            setChartData({
+                dates: response.data.dates,
+                close_prices: response.data.close_prices,
+                ma100: response.data.ma100,
+                ma200: response.data.ma200,
+                y_test: response.data.y_test,
+                y_predicted: response.data.y_predicted
+            })
+            console.log("DATES:", response.data.dates?.slice(0, 5))
+            console.log("PRICES:", response.data.close_prices?.slice(0, 5))
             if (response.data.error) {
                 setError(response.data.error)
             }
@@ -60,6 +118,24 @@ const Dashboard = () => {
             setLoading(false)
         }
     }
+    const formatInsight = (text) => {
+        if (!text) return {}
+
+        const getSection = (label) => {
+            const regex = new RegExp(`${label}:([\\s\\S]*?)(?=\\n[A-Z][a-z]+:|$)`, 'i')
+            const match = text.match(regex)
+            return match ? match[1].trim() : ''
+        }
+
+        return {
+            summary: getSection('Summary'),
+            keyDrivers: getSection('Key Drivers'),
+            riskFactors: getSection('Risk Factors'),
+            sentiment: (text.match(/Sentiment:\s*(.*)/i)?.[1] || '').trim()
+        }
+    }
+
+    const insight = formatInsight(showStructured ? typedText : '')
     return (
         <div className='container'>
             <div className="row">
@@ -74,41 +150,191 @@ const Dashboard = () => {
                         </button>
                     </form>
                 </div>
+
+                {/* ✨ AI Market Insight Card */}
+                {aiInsight && (
+                    <div
+                        style={{
+                            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                            borderLeft: '4px solid #3b82f6',
+                            padding: '24px',
+                            borderRadius: '12px',
+                            marginTop: '25px',
+                            boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                            color: '#e2e8f0'
+                        }}
+                    >
+                        <h4 style={{ color: '#60a5fa', marginBottom: '15px', fontWeight: '600' }}>
+                            ✨ AI Market Insight
+                        </h4>
+                        <div style={{ fontSize: '1.05rem', lineHeight: '1.7', marginBottom: '15px' }}>
+
+                            {/* 🔥 While typing → show raw text */}
+                            {!showStructured && (
+                                <p style={{ opacity: 0.8 }}>
+                                    {typedText}
+                                </p>
+                            )}
+
+                            {/* ✅ After typing → show structured UI */}
+                            {showStructured && (
+                                <>
+                                    {insight.summary && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <strong style={{ color: '#93c5fd' }}>📌 Summary: </strong>
+                                            {insight.summary}
+                                        </div>
+                                    )}
+
+                                    {insight.keyDrivers && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <strong style={{ color: '#93c5fd' }}>📊 Key Drivers: </strong>
+                                            {insight.keyDrivers}
+                                        </div>
+                                    )}
+
+                                    {insight.riskFactors && (
+                                        <div style={{ marginBottom: '10px' }}>
+                                            <strong style={{ color: '#93c5fd' }}>⚠️ Risk Factors: </strong>
+                                            {insight.riskFactors}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                        <div style={{
+                            display: 'inline-block',
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            background:
+                                insight.sentiment === 'Bullish'
+                                    ? 'rgba(34,197,94,0.15)'
+                                    : insight.sentiment === 'Bearish'
+                                        ? 'rgba(239,68,68,0.15)'
+                                        : 'rgba(148,163,184,0.15)',
+                            color:
+                                insight.sentiment === 'Bullish'
+                                    ? '#22c55e'
+                                    : insight.sentiment === 'Bearish'
+                                        ? '#ef4444'
+                                        : '#94a3b8',
+                            fontWeight: '600'
+                        }}>
+                            {insight.sentiment || 'Neutral'}
+                        </div>
+                    </div>
+                )}
                 {/* Print Prediction Plots */}
-                {prediction && (
-                    <div className='prediction mt-5'>
-                        <div className="p-3">
-                            {plot && (
-                                <img src={plot} style={{ maxWidth: '100%' }} />
-                            )}
-                        </div>
-                        <div className="p-3">
-                            {ma100 && (
-                                <img src={ma100} style={{ maxWidth: '100%' }} />
-                            )}
-                        </div>
-                        <div className="p-3">
-                            {ma200 && (
-                                <img src={ma200} style={{ maxWidth: '100%' }} />
-                            )}
-                        </div>
-                        <div className="p-3">
-                            {prediction && (
-                                <img src={prediction} style={{ maxWidth: '100%' }} />
-                            )}
+                {chartData?.close_prices?.length > 0 && (
+                    <div className="col-12 mt-4">
+
+                        {/* 📊 Closing + MA Chart */}
+                        <div style={{
+                            background: '#0f172a',
+                            padding: '20px',
+                            borderRadius: '12px',
+                            marginBottom: '20px',
+                            boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+                        }}>
+                            <h4 style={{ color: '#fff', marginBottom: '15px', fontWeight: '600' }}>
+                                📊 Price Analysis
+                            </h4>
+
+                            <StockChart
+                                labels={chartData.dates.slice(-150)}
+                                datasets={[
+                                    {
+                                        label: 'Closing Price',
+                                        data: chartData.close_prices.slice(-150),
+                                        borderColor: '#ffffff',
+                                        borderWidth: 2,
+                                        pointRadius: 0,
+                                        tension: 0.4
+                                    },
+                                    {
+                                        label: '100 DMA',
+                                        data: chartData.ma100.slice(-150),
+                                        borderColor: '#ef4444',
+                                        borderWidth: 1.5,
+                                        pointRadius: 0,
+                                        tension: 0.4
+                                    },
+                                    {
+                                        label: '200 DMA',
+                                        data: chartData.ma200.slice(-150),
+                                        borderColor: '#22c55e',
+                                        borderWidth: 1.5,
+                                        pointRadius: 0,
+                                        tension: 0.4
+                                    }
+                                ]}
+                            />
                         </div>
 
-                        <div className="text-light p-3">
-                            <h4>Model Evaluation</h4>
-                            <p>Mean Sqaured Error (MSE): {mse}</p>
-                            <p>Root Mean Sqaured Error (RMSE): {rmse}</p>
-                            <p>R-Squared: {r2}</p>
+                        {/* 🤖 Prediction Chart */}
+                        <div style={{
+                            background: '#0f172a',
+                            padding: '20px',
+                            borderRadius: '12px',
+                            marginBottom: '20px'
+                        }}>
+                            <h4 style={{ color: '#fff', marginBottom: '15px' }}>
+                                🤖 Model Prediction
+                            </h4>
 
+                            <StockChart
+                                labels={Array.from({ length: chartData.y_test.length }, (_, i) => i)}
+                                datasets={[
+                                    {
+                                        label: 'Actual Price',
+                                        data: chartData.y_test,
+                                        borderColor: '#3b82f6',
+                                        borderWidth: 2,
+                                        pointRadius: 0,
+                                        tension: 0.4
+                                    },
+                                    {
+                                        label: 'Predicted Price',
+                                        data: chartData.y_predicted,
+                                        borderColor: '#f59e0b',
+                                        borderWidth: 2,
+                                        pointRadius: 0,
+                                        tension: 0.4
+                                    }
+                                ]}
+                            />
+                        </div>
+
+                        {/* 📈 Metrics */}
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            gap: '20px'
+                        }}>
+                            {[
+                                { label: 'MSE', value: mse },
+                                { label: 'RMSE', value: rmse },
+                                { label: 'R² Score', value: r2 }
+                            ].map((item, i) => (
+                                <div key={i} style={{
+                                    background: '#0f172a',
+                                    padding: '20px',
+                                    borderRadius: '12px',
+                                    textAlign: 'center',
+                                    boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                                }}>
+                                    <h5 style={{ color: '#9ca3af', marginBottom: '10px' }}>
+                                        {item.label}
+                                    </h5>
+                                    <h3 style={{ color: '#fff', margin: 0 }}>
+                                        {item.value?.toFixed(4)}
+                                    </h3>
+                                </div>
+                            ))}
                         </div>
 
                     </div>
                 )}
-
             </div>
         </div>
     )
