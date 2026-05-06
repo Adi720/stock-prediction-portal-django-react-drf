@@ -116,7 +116,7 @@ This project combines **Machine Learning + Generative AI + Full Stack Developmen
 
 ### 📊 Dashboard
 
-![Dashboard](./screenshots/dashboard_new.png)
+![Dashboard](./screenshots/dashboard.png)
 
 ### 🧠 AI Market Insight
 
